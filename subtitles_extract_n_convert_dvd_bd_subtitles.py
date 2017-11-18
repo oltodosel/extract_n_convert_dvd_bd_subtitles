@@ -21,7 +21,7 @@
 execute_ = True			# execute through os.system(); or just print out commands
 del_ = True				# remove intermediate files
 select_once_ = True		# manually select subtitle track only once; for every subsequent video script will select the same track-number (for videos with same track template)
-notify_send_ = True		# notification after each conversion
+notify_send_ = True		# notification after all conversions
 
 ##############################################
 
@@ -47,9 +47,11 @@ for fname in fnames:
 			
 			sids = [ re.findall('(Track ID (\d+): subtitles .+)', x) for x in sids.split('\n') if len(re.findall('(Track ID (\d+): subtitles .+)', x)) ]
 			
-			def on_button(n):
-				global sub_tracks
+			def on_button(n, a = 0):
+				global sub_tracks, all_
 				sub_tracks = n
+				if a:
+					all_ = 1
 				w.close()
 
 			app = None
@@ -66,7 +68,7 @@ for fname in fnames:
 			mainLayout.addWidget(QLabel())
 
 			button = QPushButton('Convert all subtitles(tracks).')
-			button.clicked.connect(lambda vb, v = sids: on_button(v))
+			button.clicked.connect(lambda vb, v = sids: on_button(v, 1))
 			button.setFont(newfont)
 			mainLayout.addWidget(button)
 			
@@ -87,6 +89,13 @@ for fname in fnames:
 			w.setWindowTitle("List of avaliable subtitles.")
 			w.show()
 			app.exec_()
+		
+		if all_:
+			PIPE = subprocess.PIPE
+			sids = subprocess.Popen('mkvmerge --identify-verbose "%s"' % fname, shell=isinstance('', str), bufsize=-1, stdin=PIPE, stdout=PIPE,stderr=subprocess.STDOUT, close_fds=True).stdout.read().decode("utf8", "ignore")
+			
+			sids = [ re.findall('(Track ID (\d+): subtitles .+)', x) for x in sids.split('\n') if len(re.findall('(Track ID (\d+): subtitles .+)', x)) ]
+			sub_tracks = sids
 		
 		for strk in sub_tracks:
 			sub_track = strk[0]
@@ -116,8 +125,8 @@ for fname in fnames:
 	
 		cmd.append('vobsub2srt --verbose "%s"' %  fname.rsplit('.', 1)[0])
 	
-	if notify_send_:
-		cmd.append('notify-send -i none -t 5000 "DONE \n %s"' %  fname)
+if notify_send_:
+	cmd.append('notify-send -i none -t 5000 "DONE \n %s"' %  fname)
 
 if execute_:
 	os.system(';'.join(cmd))
