@@ -31,12 +31,19 @@ from PyQt5.QtWidgets import (QMainWindow, QPushButton, QFileDialog, QApplication
 from PyQt5.QtGui import (QFont)
 from PyQt5.QtCore import *
 
-app = QApplication(sys.argv)
-fnames = QFileDialog.getOpenFileNames(QMainWindow(), 'Open files', '*')[0]
+if len(sys.argv) > 1:
+	fnames = sys.argv[1:]
+else:
+	app = QApplication(sys.argv)
+	fnames = QFileDialog.getOpenFileNames(QMainWindow(), 'Open files', '*')[0]
 
 cmd = []
+all_ = 0
 for fname in fnames:
 	print('# ' + fname)
+	
+	if not os.path.isfile(fname):
+		continue
 	
 	if fname.rsplit('.', 1)[1].lower() not in ('sup', 'sub', 'idx'):
 		if select_once_ and 'sub_tracks' in locals():
