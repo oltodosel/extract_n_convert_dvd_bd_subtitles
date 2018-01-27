@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python
 
 ##############################################
 # Extract dvd/bluray (VobSub/PGS) subtitles and convert them into *.srt
@@ -27,6 +27,7 @@ notify_send_ = True		# notification after all conversions
 
 import re, sys, os
 import subprocess
+import json
 from PyQt5.QtWidgets import (QMainWindow, QPushButton, QFileDialog, QApplication, QDialog, QVBoxLayout, QLabel)
 from PyQt5.QtGui import (QFont)
 from PyQt5.QtCore import *
@@ -50,9 +51,7 @@ for fname in fnames:
 			pass
 		else:
 			PIPE = subprocess.PIPE
-			sids = subprocess.Popen('mkvmerge --identify-verbose "%s"' % fname, shell=isinstance('', str), bufsize=-1, stdin=PIPE, stdout=PIPE,stderr=subprocess.STDOUT, close_fds=True).stdout.read().decode("utf8", "ignore")
-			
-			sids = [ re.findall('(Track ID (\d+): subtitles .+)', x) for x in sids.split('\n') if len(re.findall('(Track ID (\d+): subtitles .+)', x)) ]
+			sids = subprocess.Popen('mkvmerge -J "%s"' % fname, shell=isinstance('', str), bufsize=-1, stdin=PIPE, stdout=PIPE,stderr=subprocess.STDOUT, close_fds=True).stdout.read().decode("utf8", "ignore")
 			
 			def on_button(n, a = 0):
 				global sub_tracks, all_
@@ -80,16 +79,24 @@ for fname in fnames:
 			mainLayout.addWidget(button)
 			
 			mainLayout.addWidget(QLabel())
-				
-			for sid in sids:
-				button = QPushButton(
-					re.sub('\[.+\]', '', sid[0][0]) + ' | ' + 
-					''.join(re.findall('language:(.*?) ', sid[0][0])) + ' | ' + 
-					''.join(re.findall('track_name:(.*?) ', sid[0][0])).replace('\s', ' ')
-				)
-				button.clicked.connect(lambda vb, v = [sid]: on_button(v))
-				button.setFont(newfont)
-				mainLayout.addWidget(button)
+			
+			#print(sids)
+			tracks = json.loads(sids)['tracks']
+			
+			for track in tracks:
+				if track['type'] == 'subtitles':
+					bt = str(track['id']) + ' | '
+					bt += track['codec'] + ' | '
+					
+					if 'language' in track['properties']:
+						bt += track['properties']['language'] + ' | '
+					if 'track_name' in track['properties']:
+						bt += track['properties']['track_name']
+					
+					button = QPushButton(bt)
+					button.clicked.connect(lambda vb, v = [[track['codec'], str(track['id'])]]: on_button(v))
+					button.setFont(newfont)
+					mainLayout.addWidget(button)
 
 			w = QDialog()
 			w.setLayout(mainLayout)
@@ -99,13 +106,16 @@ for fname in fnames:
 		
 		if all_:
 			PIPE = subprocess.PIPE
-			sids = subprocess.Popen('mkvmerge --identify-verbose "%s"' % fname, shell=isinstance('', str), bufsize=-1, stdin=PIPE, stdout=PIPE,stderr=subprocess.STDOUT, close_fds=True).stdout.read().decode("utf8", "ignore")
 			
-			sids = [ re.findall('(Track ID (\d+): subtitles .+)', x) for x in sids.split('\n') if len(re.findall('(Track ID (\d+): subtitles .+)', x)) ]
-			sub_tracks = sids
+			sids = subprocess.Popen('mkvmerge -J "%s"' % fname, shell=isinstance('', str), bufsize=-1, stdin=PIPE, stdout=PIPE,stderr=subprocess.STDOUT, close_fds=True).stdout.read().decode("utf8", "ignore")
+			
+			tracks = json.loads(sids)['tracks']
+			sub_tracks = []
+			for track in tracks:
+				if track['type'] == 'subtitles':
+					sub_tracks.append([track['codec'], str(track['id'])])
 		
-		for strk in sub_tracks:
-			sub_track = strk[0]
+		for sub_track in sub_tracks:
 			if 'PGS' in sub_track[0]:
 				cmd.append('mkvextract tracks "%s" "%s:%s.%s.sup"' % (fname, sub_track[1], fname.rsplit('.', 1)[0], sub_track[1]))
 				cmd.append('bdsup2subpp -o "%s.%s.idx" "%s.%s.sup"' % (fname.rsplit('.', 1)[0], sub_track[1], fname.rsplit('.', 1)[0], sub_track[1]))
